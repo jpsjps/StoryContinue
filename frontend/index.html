@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>StoryContinue 本地续写</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <div
+        class="theme-switcher"
+        id="theme-switcher"
+        aria-label="背景色切换"
+      >
+        <div class="theme-switcher-inner">
+          <span class="theme-label">背景色</span>
+          <select id="theme-select" class="theme-select">
+            <option value="dark">深色</option>
+            <option value="light">浅色</option>
+          </select>
+        </div>
+        <button
+          id="theme-collapse-btn"
+          class="theme-collapse-btn"
+          type="button"
+          aria-label="收起背景色切换"
+        >
+          ▾
+        </button>
+      </div>
+      <aside class="sidebar">
+        <div class="brand">
+          <img src="/static/hero.svg" alt="StoryContinue" class="brand-logo" />
+          <div class="brand-text">
+            <h1>StoryContinue</h1>
+            <p>本地 AI 小说续写工作台</p>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-header-row">
+            <h2>项目</h2>
+            <button id="new-project-btn" class="primary-ghost">新建项目</button>
+          </div>
+          <div id="new-project-form" class="new-project-form hidden">
+            <input
+              type="text"
+              id="new-project-title"
+              placeholder="输入项目名称，例如：修仙爽文草稿"
+            />
+            <div class="new-project-actions">
+              <button id="confirm-new-project-btn" class="primary">创建</button>
+              <button id="cancel-new-project-btn" class="ghost">取消</button>
+            </div>
+            <p class="hint">
+              创建后，可在右侧通过「粘贴文字」或「上传 TXT」填充原文。
+            </p>
+          </div>
+          <ul id="project-list" class="project-list"></ul>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section class="project-detail" id="project-detail">
+          <div class="empty-state">
+            <h2>欢迎使用 StoryContinue</h2>
+            <p>在左侧创建或选择一个项目，右侧即可配置风格并开始 AI 续写。</p>
+          </div>
+        </section>
+
+        <section class="write-panel">
+          <h2>续写设置</h2>
+          <label class="field">
+            <span>结局/风格</span>
+            <select id="style-select">
+              <option value="happy">圆满</option>
+              <option value="tragic">悲剧</option>
+              <option value="open">开放式</option>
+              <option value="mystery">悬疑</option>
+              <option value="thriller">惊悚</option>
+              <option value="healing">治愈</option>
+              <option value="bittersweet">苦甜</option>
+              <option value="growth">成长</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>模式</span>
+            <select id="mode-select">
+              <option value="chapter">续写一章</option>
+              <option value="ending">续写到结局</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>长期记忆</span>
+            <input
+              type="checkbox"
+              id="long-memory-switch"
+              class="switch-toggle"
+              checked
+            />
+          </label>
+          <label class="field">
+            <span>补充说明（可选）</span>
+            <textarea
+              id="user-note"
+              rows="4"
+              placeholder="例如：这章希望多写主角和师父的互动，对话多一点，节奏稍微慢一点。"
+            ></textarea>
+          </label>
+          <button id="start-write-btn" class="primary block">开始续写</button>
+        </section>
+
+        <section class="stream-output">
+          <h2>续写结果</h2>
+          <div id="stream-status" class="stream-status"></div>
+          <pre id="output"></pre>
+        </section>
+      </main>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+  </html>
+

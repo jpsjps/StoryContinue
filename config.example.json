@@ -1,0 +1,7 @@
+{
+  "provider": "openai",
+  "api_base": "https://api.openai.com/v1",
+  "api_key": "REPLACE_WITH_YOUR_KEY",
+  "model": "gpt-4.1"
+}
+

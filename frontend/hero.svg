@@ -1,0 +1,33 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6F8BFF"/>
+      <stop offset="50%" stop-color="#9F7BFF"/>
+      <stop offset="100%" stop-color="#2BD4CF"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B1020"/>
+      <stop offset="100%" stop-color="#151C34"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="104" height="104" rx="26" fill="#050814"/>
+  <rect x="10" y="10" width="100" height="100" rx="24" fill="url(#bg)" opacity="0.18"/>
+
+  <rect x="30" y="30" width="60" height="60" rx="8" fill="#060A18" stroke="#2F3C74" stroke-width="1.5"/>
+  <rect x="34" y="34" width="52" height="52" rx="6" fill="url(#page)" />
+
+  <path d="M40 46H78" stroke="#8FA4FF" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+  <path d="M40 52H72" stroke="#6177FF" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+  <path d="M40 58H70" stroke="#9F7BFF" stroke-width="1.7" stroke-linecap="round" opacity="0.9"/>
+  <path d="M40 64H60" stroke="#6BE3D6" stroke-width="1.7" stroke-linecap="round" opacity="0.9"/>
+  <path d="M40 70H68" stroke="#A9B6FF" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+
+  <path d="M54 82C59 78 64 76 70 76C75 76 79 77.5 82 80" stroke="#6BE3D6" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+  <circle cx="54" cy="82" r="2" fill="#6BE3D6"/>
+  <circle cx="82" cy="80" r="2" fill="#6BE3D6"/>
+
+  <circle cx="28" cy="32" r="3" fill="#6F8BFF" opacity="0.9"/>
+  <circle cx="92" cy="26" r="2.5" fill="#2BD4CF" opacity="0.9"/>
+  <circle cx="24" cy="86" r="2.5" fill="#9F7BFF" opacity="0.8"/>
+</svg>
+
