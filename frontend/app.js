@@ -1,4 +1,20 @@
 const apiBase = "/api";
+const STYLE_LABELS = {
+  happy: "圆满",
+  tragic: "悲剧",
+  open: "开放式",
+  mystery: "悬疑",
+  thriller: "惊悚",
+  healing: "治愈",
+  bittersweet: "苦甜",
+  growth: "成长",
+};
+
+function getStyleLabel(styleId) {
+  if (!styleId) return "未设置";
+  return STYLE_LABELS[styleId] || styleId;
+}
+
 window.multiChapterState = {
   isActive: false,
   stopRequested: false,
@@ -100,11 +116,12 @@ async function loadProject(id) {
           const raw = c.content || "";
           const preview = raw.replace(/\s+/g, " ").trim().slice(0, 90);
           const typeLabel = c.type === "ending" ? "结局" : "正文";
+          const styleLabel = getStyleLabel(c.style_id);
           return `<li class="chapter-item" data-chapter-id="${c.id}" data-chapter-index="${c.index}">
             <div class="chapter-item-row">
               <span>第 ${c.index} 章</span>
               <span class="chip chip-${c.type}">${typeLabel}</span>
-              <span class="chip">${c.style_id}</span>
+              <span class="chip">${styleLabel}</span>
               <span class="chip chip-model">${c.model}</span>
             </div>
             <div class="chapter-preview">${escapeHTML(preview || "（无内容）")}</div>
@@ -294,8 +311,22 @@ function attachProjectDetailHandlers(project) {
       if (userNoteEl) userNoteEl.value = finalNote;
 
       await truncateChaptersFromIndex(project.id, fromIndex);
-      // 截断后，调用现有续写接口生成“第 fromIndex 章”
-      startStream();
+      // 关键：先刷新项目状态，确保 currentProjectChapters 已是截断后的数据，
+      // 否则后续续写可能使用旧章节数，导致章节标题与内容语义不一致
+      await loadProject(project.id);
+
+      // 重写某章默认按“单章续写”执行，避免误触发 ending 多章节流程
+      const modeSelect = document.getElementById("mode-select");
+      if (modeSelect) modeSelect.value = "chapter";
+      updateEndingOptionsVisibility();
+
+      // 不再自动开始续写，避免用户来不及再次确认参数
+      const statusEl = document.getElementById("stream-status");
+      if (statusEl) {
+        statusEl.textContent =
+          `已完成截断，当前将重写第 ${fromIndex} 章。请确认风格/说明后，手动点击“开始续写”。`;
+        statusEl.classList.remove("error");
+      }
     });
   });
 
@@ -501,8 +532,9 @@ function renderChapterContentById(chapterId) {
     return;
   }
 
+  const styleLabel = getStyleLabel(chapter.style_id);
   metaEl &&
-    (metaEl.textContent = `第 ${chapter.index} 章 · ${chapter.type === "ending" ? "结局" : "正文"} · 风格：${chapter.style_id} · 模型：${chapter.model}`);
+    (metaEl.textContent = `第 ${chapter.index} 章 · ${chapter.type === "ending" ? "结局" : "正文"} · 风格：${styleLabel} · 模型：${chapter.model}`);
   chapterContentPre.textContent = chapter.content || "";
 }
 
