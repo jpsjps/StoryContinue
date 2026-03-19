@@ -643,6 +643,49 @@ button.block {
   margin-top: 18px;
 }
 
+.ending-options,
+.tone-options {
+  margin-top: 8px;
+}
+
+.ending-options .field.inline-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.ending-options .field.inline-field span {
+  flex-shrink: 0;
+}
+
+.field-label {
+  display: block;
+  color: #c6d0e5;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #d9e1ee;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+  accent-color: #9f7bff;
+}
+
 .empty-state {
   text-align: center;
   padding: 80px 20px;
@@ -666,6 +709,14 @@ button.block {
   /* 让结果区尽量占满右侧高度 */
   max-height: none;
   overflow-y: auto;
+}
+
+.stream-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .chapter-content-meta {

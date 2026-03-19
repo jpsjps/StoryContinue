@@ -1,4 +1,12 @@
 const apiBase = "/api";
+window.multiChapterState = {
+  isActive: false,
+  stopRequested: false,
+  totalChapters: 1,
+  currentStep: 0,
+  selectedTones: ["smooth"],
+  confirmEachChapter: true,
+};
 
 function escapeHTML(str) {
   return str
@@ -529,12 +537,157 @@ function toggleNewProjectForm(show) {
   }
 }
 
+function getSelectedTones() {
+  const checkboxes = document.querySelectorAll('input[name="tone"]:checked');
+  return Array.from(checkboxes).map((cb) => cb.value);
+}
+
+function updateEndingOptionsVisibility() {
+  const modeSelect = document.getElementById("mode-select");
+  const endingOptions = document.getElementById("ending-options");
+  const toneOptions = document.getElementById("tone-options");
+  if (!modeSelect || !endingOptions || !toneOptions) return;
+  const isEndingMode = modeSelect.value === "ending";
+  endingOptions.classList.toggle("hidden", !isEndingMode);
+  toneOptions.classList.toggle("hidden", !isEndingMode);
+}
+
+function buildSingleChapterParams({
+  projectId,
+  styleId,
+  mode,
+  useLongMemory,
+  userNote,
+  chapterIndex,
+  totalChapters,
+  tone,
+  isFinalChapter,
+}) {
+  const requestId =
+    (typeof crypto !== "undefined" && crypto.randomUUID && crypto.randomUUID()) ||
+    `req_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+  const params = new URLSearchParams({
+    project_id: projectId,
+    style_id: styleId,
+    mode,
+    use_long_memory: String(useLongMemory),
+    request_id: requestId,
+  });
+  if (userNote) params.append("user_note", userNote);
+  if (chapterIndex) params.append("chapter_index", String(chapterIndex));
+  if (totalChapters) params.append("total_chapters", String(totalChapters));
+  if (tone) params.append("tone", tone);
+  if (isFinalChapter) params.append("is_final_chapter", "true");
+
+  return { params, requestId };
+}
+
+function runSingleStream({ params, requestId, projectId, progressLabel = "" }) {
+  return new Promise((resolve) => {
+    const output = document.getElementById("output");
+    const startBtn = document.getElementById("start-write-btn");
+    const panel = document.querySelector(".stream-output");
+    const statusEl = document.getElementById("stream-status");
+    const stopBtn = document.getElementById("stop-write-btn");
+
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.textContent = progressLabel ? `续写中（${progressLabel}）…` : "续写中…";
+    }
+    if (stopBtn) stopBtn.disabled = false;
+    if (panel) panel.classList.add("streaming");
+
+    const es = new EventSource(`${apiBase}/stream/write?${params.toString()}`);
+    window._activeSse = { es, requestId };
+
+    es.addEventListener("chunk", (event) => {
+      output.textContent += event.data;
+    });
+
+    const finish = async (opts = { ok: true, isError: false, message: "" }) => {
+      es.close();
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.textContent = "开始续写";
+      }
+      if (stopBtn) stopBtn.disabled = true;
+      if (panel) panel.classList.remove("streaming");
+
+      if (statusEl) {
+        if (opts.isError) {
+          statusEl.textContent = opts.message || "续写失败，请检查网络或配置。";
+          statusEl.classList.add("error");
+        } else if (opts.message) {
+          statusEl.textContent = opts.message;
+          statusEl.classList.remove("error");
+        } else {
+          statusEl.textContent = "";
+          statusEl.classList.remove("error");
+        }
+      }
+      if (opts.ok && !opts.isError) {
+        await fetchProjects();
+        await loadProject(projectId);
+      }
+      resolve(opts.ok && !opts.isError);
+    };
+
+    es.addEventListener("end", () => finish({ ok: true, isError: false, message: "" }));
+
+    es.addEventListener("cancelled", (event) => {
+      const raw = event && event.data ? String(event.data) : "";
+      finish({
+        ok: false,
+        isError: true,
+        message: raw || "已停止续写。",
+      });
+    });
+
+    es.addEventListener("app_error", (event) => {
+      const raw = event && event.data ? String(event.data) : "";
+      let parsed = null;
+      try {
+        parsed = raw ? JSON.parse(raw) : null;
+      } catch (_) {
+        parsed = null;
+      }
+      const msg = (parsed && (parsed.message || parsed.repr || parsed.body)) || raw;
+      if (raw) output.textContent = raw;
+      finish({
+        ok: false,
+        isError: true,
+        message: msg || "续写失败：可能是网络问题、API Key 无效或配额耗尽。",
+      });
+    });
+
+    es.addEventListener("error", (event) => {
+      let msg = "";
+      if (event && event.data) msg = String(event.data);
+      finish({
+        ok: false,
+        isError: true,
+        message: msg || "续写过程中发生错误，请稍后重试。",
+      });
+    });
+  });
+}
+
 function startStream() {
   const projectId = window.currentProjectId;
   if (!projectId) {
     alert("请先选择或创建一个项目");
     return;
   }
+  // 关闭上一次请求（如果还在跑）
+  if (window._activeSse && window._activeSse.es) {
+    try {
+      window._activeSse.es.close();
+    } catch (_) {
+      // ignore
+    }
+  }
+
   const styleId = document.getElementById("style-select").value;
   const mode = document.getElementById("mode-select").value;
   const userNote = document.getElementById("user-note").value.trim();
@@ -545,106 +698,88 @@ function startStream() {
 
   const output = document.getElementById("output");
   output.textContent = "";
-
-  const startBtn = document.getElementById("start-write-btn");
-  const panel = document.querySelector(".stream-output");
   const statusEl = document.getElementById("stream-status");
-
   if (statusEl) {
     statusEl.textContent = "";
     statusEl.classList.remove("error");
   }
 
-  if (startBtn) {
-    startBtn.disabled = true;
-    startBtn.textContent = "续写中…";
-  }
-  if (panel) {
-    panel.classList.add("streaming");
-  }
-
-  const params = new URLSearchParams({
-    project_id: projectId,
-    style_id: styleId,
-    mode,
-    use_long_memory: String(useLongMemory),
-  });
-  if (userNote) params.append("user_note", userNote);
-
-  const es = new EventSource(`${apiBase}/stream/write?${params.toString()}`);
-
-  es.addEventListener("chunk", (event) => {
-    output.textContent += event.data;
-  });
-
-  const finish = async (opts = { isError: false, message: "" }) => {
-    es.close();
-    if (startBtn) {
-      startBtn.disabled = false;
-      startBtn.textContent = "开始续写";
+  // 多章节模式：仅在“续写到结局”开启
+  if (mode === "ending") {
+    const totalInput = document.getElementById("total-chapters-input");
+    const confirmInput = document.getElementById("confirm-each-chapter");
+    const totalChapters = parseInt((totalInput && totalInput.value) || "1", 10);
+    if (!totalChapters || totalChapters < 1 || totalChapters > 50) {
+      alert("本次续写章数需在 1-50 之间。");
+      return;
     }
-    if (panel) {
-      panel.classList.remove("streaming");
+
+    window.multiChapterState.isActive = true;
+    window.multiChapterState.stopRequested = false;
+    window.multiChapterState.totalChapters = totalChapters;
+    window.multiChapterState.currentStep = 0;
+    window.multiChapterState.selectedTones = getSelectedTones();
+    if (!window.multiChapterState.selectedTones.length) {
+      window.multiChapterState.selectedTones = ["smooth"];
     }
-    if (statusEl) {
-      if (opts.isError) {
-        statusEl.textContent =
-          opts.message ||
-          "续写失败：可能是网络问题或 API 配额不足，请稍后重试或检查配置。";
-        statusEl.classList.add("error");
-      } else {
-        statusEl.textContent = "";
-        statusEl.classList.remove("error");
+    window.multiChapterState.confirmEachChapter = confirmInput ? confirmInput.checked : true;
+
+    const baseChapterIndex = (window.currentProjectChapters || []).length;
+
+    (async () => {
+      for (let step = 1; step <= totalChapters; step++) {
+        if (window.multiChapterState.stopRequested) break;
+
+        window.multiChapterState.currentStep = step;
+        const isFinal = step === totalChapters;
+        const chapterIndex = baseChapterIndex + step;
+        const tone = window.multiChapterState.selectedTones.join(",");
+
+        if (statusEl) {
+          statusEl.textContent = `正在新增第 ${step}/${totalChapters} 章…`;
+        }
+
+        const { params, requestId } = buildSingleChapterParams({
+          projectId,
+          styleId,
+          mode: isFinal ? "ending" : "chapter",
+          useLongMemory,
+          userNote,
+          chapterIndex,
+          totalChapters,
+          tone,
+          isFinalChapter: isFinal,
+        });
+
+        const ok = await runSingleStream({
+          params,
+          requestId,
+          projectId,
+          progressLabel: `${step}/${totalChapters}`,
+        });
+        if (!ok || window.multiChapterState.stopRequested) break;
+
+        if (window.multiChapterState.confirmEachChapter && !isFinal) {
+          // 简化确认：避免复杂弹窗，直接 confirm 即可
+          const goOn = confirm(`第 ${step} 章已完成，继续生成下一章吗？`);
+          if (!goOn) break;
+        }
       }
-    }
-    if (!opts.isError) {
-      await fetchProjects();
-      await loadProject(projectId);
-    }
-  };
+      window.multiChapterState.isActive = false;
+      window.multiChapterState.stopRequested = false;
+    })();
+    return;
+  }
 
-  es.addEventListener("end", () => {
-    finish({ isError: false, message: "" });
+  // 单章模式
+  const { params, requestId } = buildSingleChapterParams({
+    projectId,
+    styleId,
+    mode,
+    useLongMemory,
+    userNote,
   });
-
-  es.addEventListener("app_error", (event) => {
-    console.error("SSE app_error", event);
-    const raw = event && event.data ? String(event.data) : "";
-
-    let parsed = null;
-    try {
-      parsed = raw ? JSON.parse(raw) : null;
-    } catch (_) {
-      parsed = null;
-    }
-
-    const msg =
-      (parsed && (parsed.message || parsed.repr || parsed.body)) || raw;
-
-    // 把完整返回原文尽量展示出来
-    if (raw) {
-      output.textContent = raw;
-    }
-
-    finish({
-      isError: true,
-      message:
-        msg ||
-        "续写失败：可能是网络问题、API Key 无效或配额耗尽，请检查配置后重试。",
-    });
-  });
-
-  es.addEventListener("error", (event) => {
-    console.error("SSE error", event);
-    let msg = "";
-    if (event && event.data) msg = String(event.data);
-    finish({
-      isError: true,
-      message:
-        msg ||
-        "续写过程中发生错误：可能是网络问题、API Key 无效或配额耗尽，请检查配置后重试。",
-    });
-  });
+  runSingleStream({ params, requestId, projectId });
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -698,6 +833,42 @@ window.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("start-write-btn")
     .addEventListener("click", startStream);
+
+  const modeSelect = document.getElementById("mode-select");
+  if (modeSelect) {
+    updateEndingOptionsVisibility();
+    modeSelect.addEventListener("change", updateEndingOptionsVisibility);
+  }
+
+  const stopBtn = document.getElementById("stop-write-btn");
+  if (stopBtn) {
+    stopBtn.addEventListener("click", async () => {
+      if (!window._activeSse || !window._activeSse.requestId) return;
+      window.multiChapterState.stopRequested = true;
+      const requestId = window._activeSse.requestId;
+      try {
+        // 通知后端停止
+        await fetch(`${apiBase}/stream/cancel?request_id=${encodeURIComponent(requestId)}`, {
+          method: "POST",
+        });
+      } catch (e) {
+        console.error(e);
+      }
+      // 立即关闭前端连接
+      try {
+        window._activeSse.es && window._activeSse.es.close();
+      } catch (_) {
+        // ignore
+      }
+      window._activeSse = null;
+      const statusEl = document.getElementById("stream-status");
+      if (statusEl) {
+        statusEl.textContent = "已请求停止续写，正在收尾...";
+        statusEl.classList.remove("error");
+      }
+    });
+    stopBtn.disabled = true;
+  }
   fetchProjects();
 });
 

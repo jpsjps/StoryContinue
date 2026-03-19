@@ -90,6 +90,40 @@
               <option value="ending">续写到结局</option>
             </select>
           </label>
+          <div id="ending-options" class="ending-options hidden">
+            <label class="field">
+              <span>本次新增章节数</span>
+              <input
+                type="number"
+                id="total-chapters-input"
+                min="1"
+                max="50"
+                value="3"
+              />
+            </label>
+            <label class="field inline-field">
+              <span>每章完成后确认</span>
+              <input
+                type="checkbox"
+                id="confirm-each-chapter"
+                class="switch-toggle"
+                checked
+              />
+            </label>
+            <p class="hint">
+              将从当前进度开始新增 N 章，最后一章会自动按“结局章”收束。
+              关闭“每章完成后确认”后会连续生成，不再逐章询问。
+            </p>
+          </div>
+          <div id="tone-options" class="tone-options hidden">
+            <span class="field-label">故事基调</span>
+            <div class="checkbox-group">
+              <label><input type="checkbox" name="tone" value="dramatic" /> 跌宕起伏</label>
+              <label><input type="checkbox" name="tone" value="foreshadow" /> 埋伏笔</label>
+              <label><input type="checkbox" name="tone" value="smooth" checked /> 平缓推进</label>
+              <label><input type="checkbox" name="tone" value="accelerate" /> 加速推进</label>
+            </div>
+          </div>
           <label class="field">
             <span>长期记忆</span>
             <input
@@ -111,7 +145,12 @@
         </section>
 
         <section class="stream-output">
-          <h2>续写结果</h2>
+          <div class="stream-header">
+            <h2>续写结果</h2>
+            <button id="stop-write-btn" class="ghost small" type="button" disabled>
+              停止
+            </button>
+          </div>
           <div id="stream-status" class="stream-status"></div>
           <pre id="output"></pre>
         </section>

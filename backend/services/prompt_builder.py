@@ -43,18 +43,28 @@ def _build_context_block(context: ContextResult) -> str:
     return "\n".join(parts)
 
 
-def _build_goal_block(mode: ModeType, next_chapter_index: int) -> str:
-    if mode == "chapter":
+def _build_goal_block(
+    mode: ModeType,
+    next_chapter_index: int,
+    total_chapters: Optional[int] = None,
+    is_final_chapter: bool = False,
+) -> str:
+    progress_desc = f"第 {next_chapter_index} 章"
+    if total_chapters is not None and total_chapters > 0:
+        progress_desc += f"（本次共 {total_chapters} 章）"
+
+    if is_final_chapter or mode == "ending":
         return f"""
-- 现在请你续写「第 {next_chapter_index} 章」的内容，而不是总结。
+- 现在请你创作「故事的最终结局章节」（{progress_desc} 或尾声）。
+- 在本章内完整收束故事的主要矛盾和人物关系。
+- 不要再为后续章节刻意铺垫，本章结束后可以视为整部故事已经结束。
+""".strip()
+
+    return f"""
+- 现在请你续写「{progress_desc}」的内容，而不是总结。
 - 本章需要自然承接上述剧情，继续推动故事发展。
 - 保持人物行为和事件逻辑自洽，不要突然引入完全无关的新设定（除非非常必要）。
 - 本章不需要结束整部故事，可以适度埋下伏笔。
-""".strip()
-    return f"""
-- 现在请你创作「故事的最终结局章节」（第 {next_chapter_index} 章或尾声）。
-- 在本章内完整收束故事的主要矛盾和人物关系。
-- 不要再为后续章节刻意铺垫，本章结束后可以视为整部故事已经结束。
 """.strip()
 
 
@@ -72,6 +82,25 @@ def _build_user_note_block(user_note: Optional[str]) -> str:
     return f"# 用户补充说明（请优先考虑）\n{user_note.strip()}"
 
 
+def _build_tone_block(tone: Optional[str]) -> str:
+    if not tone:
+        return ""
+
+    tone_list = [t.strip() for t in tone.split(",") if t.strip()]
+    tone_prompts = {
+        "dramatic": "情节跌宕起伏，增强戏剧张力，多设置转折和冲突",
+        "foreshadow": "注意埋下伏笔，为后续剧情做铺垫，设置悬念",
+        "smooth": "按正常节奏平稳推进故事，保持叙事流畅",
+        "accelerate": "加快故事推进速度，尽快推进核心冲突发展",
+    }
+
+    instructions = [tone_prompts.get(t, "") for t in tone_list]
+    instructions = [i for i in instructions if i]
+    if not instructions:
+        return ""
+    return f"# 叙事节奏指引\n本章要求：{'；'.join(instructions)}。"
+
+
 def build_story_prompts(
     *,
     project: Project,
@@ -80,12 +109,16 @@ def build_story_prompts(
     mode: ModeType,
     next_chapter_index: int,
     user_note: Optional[str] = None,
+    tone: Optional[str] = None,
+    total_chapters: Optional[int] = None,
+    is_final_chapter: bool = False,
 ) -> PromptBuildResult:
     system_prompt = _build_system_prompt()
     context_block = _build_context_block(context)
-    goal_block = _build_goal_block(mode, next_chapter_index)
+    goal_block = _build_goal_block(mode, next_chapter_index, total_chapters, is_final_chapter)
     style_block = _build_style_block(style, mode)
     user_note_block = _build_user_note_block(user_note)
+    tone_block = _build_tone_block(tone)
 
     user_prompt_parts = [
         "# 故事背景与已发生剧情（请充分理解）",
@@ -97,6 +130,8 @@ def build_story_prompts(
         "# 结局风格指引",
         style_block,
     ]
+    if tone_block:
+        user_prompt_parts.extend(["", tone_block])
     if user_note_block:
         user_prompt_parts.extend(["", user_note_block])
 
@@ -109,6 +144,9 @@ def build_story_prompts(
         "style_id": style["id"],
         "style_name": style["name"],
         "chapter_index": next_chapter_index,
+        "total_chapters": total_chapters,
+        "tone": tone,
+        "is_final_chapter": is_final_chapter,
     }
 
     return {

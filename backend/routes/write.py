@@ -1,4 +1,5 @@
 from typing import Literal, Optional
+import asyncio
 import json
 
 from fastapi import APIRouter, HTTPException
@@ -18,6 +19,9 @@ from .. import config as app_config
 
 
 router = APIRouter()
+
+# request_id -> asyncio.Event：用于中断某次 SSE 续写
+_cancel_events: dict[str, asyncio.Event] = {}
 
 
 class WriteRequest(BaseModel):
@@ -117,10 +121,22 @@ async def stream_write(
     max_tokens: Optional[int] = None,
     user_note: Optional[str] = None,
     use_long_memory: bool = True,
+    request_id: Optional[str] = None,
+    chapter_index: Optional[int] = None,
+    total_chapters: Optional[int] = None,
+    tone: Optional[str] = None,
+    is_final_chapter: bool = False,
 ):
     project = project_store.get_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    cancel_event: Optional[asyncio.Event] = None
+    if request_id:
+        cancel_event = _cancel_events.get(request_id)
+        if cancel_event is None:
+            cancel_event = asyncio.Event()
+            _cancel_events[request_id] = cancel_event
 
     # 初始化 LLM 适配器
     adapter = _get_llm_adapter()
@@ -171,6 +187,8 @@ async def stream_write(
         max_context_chars=8000,
     )
     next_index = len(project.chapters) + 1
+    if chapter_index is not None and chapter_index > 0:
+        next_index = chapter_index
     prompts = build_story_prompts(
         project={
             "id": project.id,
@@ -197,10 +215,14 @@ async def stream_write(
         mode=mode,
         next_chapter_index=next_index,
         user_note=user_note,
+        tone=tone,
+        total_chapters=total_chapters,
+        is_final_chapter=is_final_chapter,
     )
 
     async def event_generator():
         full_text_chunks: list[str] = []
+        cancelled = False
         try:
             async for chunk in adapter.generate_stream(
                 model=model,
@@ -208,6 +230,9 @@ async def stream_write(
                 user_prompt=prompts["user_prompt"],
                 max_tokens=max_tokens,
             ):
+                if cancel_event and cancel_event.is_set():
+                    cancelled = True
+                    break
                 full_text_chunks.append(chunk)
                 yield f"event: chunk\ndata: {chunk}\n\n"
         except Exception as exc:  # noqa: BLE001
@@ -217,6 +242,8 @@ async def stream_write(
                 "type": exc.__class__.__name__,
                 "repr": repr(exc),
             }
+            if request_id:
+                _cancel_events.pop(request_id, None)
             # 尽量抓取 SDK 异常体信息（不同 provider 字段不一致，尽量不抛二次异常）
             for key in ("status_code", "code", "body", "response"):
                 try:
@@ -235,8 +262,17 @@ async def stream_write(
             )
             return
 
+        if cancelled:
+            if request_id:
+                _cancel_events.pop(request_id, None)
+            yield (
+                "event: cancelled\n"
+                f"data: {json.dumps({'message': '已停止续写'}, ensure_ascii=False)}\n\n"
+            )
+            return
+
         full_text = "".join(full_text_chunks)
-        chapter_type = "ending" if mode == "ending" else "normal"
+        chapter_type = "ending" if (is_final_chapter or mode == "ending") else "normal"
         updated_project = project_store.add_chapter(
             project_id=project.id,
             content=full_text,
@@ -252,5 +288,20 @@ async def stream_write(
             f"data: {json.dumps({'project_id': project.id, 'chapter_id': chapter_id, 'mode': mode}, ensure_ascii=False)}\n\n"
         )
 
+        if request_id:
+            _cancel_events.pop(request_id, None)
+
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.post("/stream/cancel")
+async def cancel_stream(request_id: str):
+    """
+    通知后端停止指定 request_id 的 SSE 续写。
+    """
+    ev = _cancel_events.get(request_id)
+    if not ev:
+        raise HTTPException(status_code=404, detail="request_id not found")
+    ev.set()
+    return {"ok": True}
 
