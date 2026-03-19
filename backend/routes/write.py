@@ -10,6 +10,7 @@ from ..services import project_store
 from ..services.context import build_context
 from ..services.prompt_builder import (
     build_story_prompts,
+    build_humanize_prompts,
     StyleConfig,
     ModeType,
 )
@@ -125,7 +126,9 @@ async def stream_write(
     chapter_index: Optional[int] = None,
     total_chapters: Optional[int] = None,
     tone: Optional[str] = None,
+    protagonist_team: Optional[str] = None,
     is_final_chapter: bool = False,
+    humanize_text: bool = True,
 ):
     project = project_store.get_project(project_id)
     if not project:
@@ -216,6 +219,7 @@ async def stream_write(
         next_chapter_index=next_index,
         user_note=user_note,
         tone=tone,
+        protagonist_team=protagonist_team,
         total_chapters=total_chapters,
         is_final_chapter=is_final_chapter,
     )
@@ -272,6 +276,30 @@ async def stream_write(
             return
 
         full_text = "".join(full_text_chunks)
+        if humanize_text and full_text.strip():
+            try:
+                yield (
+                    "event: phase\n"
+                    f"data: {json.dumps({'stage': 'humanizing', 'message': '去AI味中...'}, ensure_ascii=False)}\n\n"
+                )
+                rewrite_prompts = build_humanize_prompts(
+                    chapter_text=full_text,
+                    style_name=style["name"],
+                    tone=tone,
+                )
+                rewritten = await adapter.generate_text(
+                    model=model,
+                    system_prompt=rewrite_prompts["system_prompt"],
+                    user_prompt=rewrite_prompts["user_prompt"],
+                    max_tokens=max_tokens,
+                    temperature=0.35,
+                )
+                if rewritten and rewritten.strip():
+                    full_text = rewritten.strip()
+            except Exception:
+                # 润色失败不阻断主流程，回退为原始生成结果
+                pass
+
         chapter_type = "ending" if (is_final_chapter or mode == "ending") else "normal"
         updated_project = project_store.add_chapter(
             project_id=project.id,

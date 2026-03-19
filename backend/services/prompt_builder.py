@@ -101,6 +101,24 @@ def _build_tone_block(tone: Optional[str]) -> str:
     return f"# 叙事节奏指引\n本章要求：{'；'.join(instructions)}。"
 
 
+def _build_protagonist_team_block(protagonist_team: Optional[str]) -> str:
+    if not protagonist_team:
+        return ""
+
+    names = [n.strip() for n in protagonist_team.split(",") if n.strip()]
+    if not names:
+        return ""
+    names_text = "、".join(names)
+    return (
+        "# 主角团聚焦要求\n"
+        f"- 主角团成员：{names_text}。\n"
+        "- 本章叙事需围绕主角团展开，关键推进尽量与其行动、关系变化相关。\n"
+        "- 同时要加入有存在感的配角/龙套（如路人、同事、店家、同学、邻里等），"
+        "通过互动与环境细节增强生活感，不要只让主角自说自话。\n"
+        "- 配角可短暂出场，但应对场景气氛、信息传递或冲突推进产生具体作用。"
+    )
+
+
 def build_story_prompts(
     *,
     project: Project,
@@ -110,6 +128,7 @@ def build_story_prompts(
     next_chapter_index: int,
     user_note: Optional[str] = None,
     tone: Optional[str] = None,
+    protagonist_team: Optional[str] = None,
     total_chapters: Optional[int] = None,
     is_final_chapter: bool = False,
 ) -> PromptBuildResult:
@@ -119,6 +138,7 @@ def build_story_prompts(
     style_block = _build_style_block(style, mode)
     user_note_block = _build_user_note_block(user_note)
     tone_block = _build_tone_block(tone)
+    protagonist_team_block = _build_protagonist_team_block(protagonist_team)
 
     user_prompt_parts = [
         "# 故事背景与已发生剧情（请充分理解）",
@@ -132,6 +152,8 @@ def build_story_prompts(
     ]
     if tone_block:
         user_prompt_parts.extend(["", tone_block])
+    if protagonist_team_block:
+        user_prompt_parts.extend(["", protagonist_team_block])
     if user_note_block:
         user_prompt_parts.extend(["", user_note_block])
 
@@ -146,6 +168,7 @@ def build_story_prompts(
         "chapter_index": next_chapter_index,
         "total_chapters": total_chapters,
         "tone": tone,
+        "protagonist_team": protagonist_team,
         "is_final_chapter": is_final_chapter,
     }
 
@@ -153,5 +176,40 @@ def build_story_prompts(
         "system_prompt": system_prompt,
         "user_prompt": user_prompt,
         "meta": meta,
+    }
+
+
+def build_humanize_prompts(*, chapter_text: str, style_name: str, tone: Optional[str] = None) -> PromptBuildResult:
+    """
+    对已生成章节进行二次润色，降低模板化和“AI 腔”。
+    必须保留事实与剧情，不得改动关键设定。
+    """
+    system_prompt = """
+你是一名资深中文小说编辑，擅长在不改变剧情事实的前提下润色文本，让表达更自然、更像人类作者手写稿。
+
+# 硬性要求
+- 只输出润色后的小说正文，不要解释。
+- 不改变人物、事件、时间顺序、核心设定，不新增关键剧情点。
+- 降低模板化表达与总结腔，避免说教、口号式结尾。
+- 减少抽象判断，多用可感知细节（动作、神态、环境、对话节奏）。
+- 句式长短交替，允许适度留白，不要所有段落都“完美闭环”。
+- 不得输出违法违规内容。
+    """.strip()
+
+    tone_block = _build_tone_block(tone)
+    tone_hint = f"\n\n{tone_block}" if tone_block else ""
+    user_prompt = (
+        f"# 润色目标\n"
+        f"- 风格倾向：{style_name}\n"
+        f"- 任务：只改表达，不改剧情事实。\n"
+        f"{tone_hint}\n\n"
+        f"# 待润色正文\n"
+        f"{chapter_text.strip()}"
+    ).strip()
+
+    return {
+        "system_prompt": system_prompt,
+        "user_prompt": user_prompt,
+        "meta": {"task": "humanize_chapter", "style_name": style_name, "tone": tone},
     }
 

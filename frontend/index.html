@@ -134,6 +134,23 @@
             />
           </label>
           <label class="field">
+            <span>去 AI 味润色</span>
+            <input
+              type="checkbox"
+              id="humanize-switch"
+              class="switch-toggle"
+              checked
+            />
+          </label>
+          <label class="field">
+            <span>主角团（可选）</span>
+            <input
+              type="text"
+              id="protagonist-team-input"
+              placeholder="例如：林川, 苏晚, 顾北（逗号分隔）"
+            />
+          </label>
+          <label class="field">
             <span>补充说明（可选）</span>
             <textarea
               id="user-note"
@@ -152,6 +169,9 @@
             </button>
           </div>
           <div id="stream-status" class="stream-status"></div>
+          <div id="stream-progress" class="stream-progress hidden" aria-hidden="true">
+            <div id="stream-progress-bar" class="stream-progress-bar"></div>
+          </div>
           <pre id="output"></pre>
         </section>
       </main>

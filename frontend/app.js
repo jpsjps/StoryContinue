@@ -589,6 +589,8 @@ function buildSingleChapterParams({
   styleId,
   mode,
   useLongMemory,
+  humanizeText,
+  protagonistTeam,
   userNote,
   chapterIndex,
   totalChapters,
@@ -604,9 +606,11 @@ function buildSingleChapterParams({
     style_id: styleId,
     mode,
     use_long_memory: String(useLongMemory),
+    humanize_text: String(humanizeText),
     request_id: requestId,
   });
   if (userNote) params.append("user_note", userNote);
+  if (protagonistTeam) params.append("protagonist_team", protagonistTeam);
   if (chapterIndex) params.append("chapter_index", String(chapterIndex));
   if (totalChapters) params.append("total_chapters", String(totalChapters));
   if (tone) params.append("tone", tone);
@@ -622,6 +626,23 @@ function runSingleStream({ params, requestId, projectId, progressLabel = "" }) {
     const panel = document.querySelector(".stream-output");
     const statusEl = document.getElementById("stream-status");
     const stopBtn = document.getElementById("stop-write-btn");
+    const progressEl = document.getElementById("stream-progress");
+    const progressBarEl = document.getElementById("stream-progress-bar");
+
+    const setProgress = (percent, message = "", isError = false) => {
+      if (progressEl) {
+        progressEl.classList.remove("hidden");
+        progressEl.classList.toggle("error", !!isError);
+      }
+      if (progressBarEl) {
+        const safe = Math.max(0, Math.min(100, Number(percent) || 0));
+        progressBarEl.style.width = `${safe}%`;
+      }
+      if (statusEl && message) {
+        statusEl.textContent = message;
+        statusEl.classList.toggle("error", !!isError);
+      }
+    };
 
     if (startBtn) {
       startBtn.disabled = true;
@@ -629,12 +650,36 @@ function runSingleStream({ params, requestId, projectId, progressLabel = "" }) {
     }
     if (stopBtn) stopBtn.disabled = false;
     if (panel) panel.classList.add("streaming");
+    setProgress(12, progressLabel ? `续写中（${progressLabel}）…` : "续写中…", false);
 
     const es = new EventSource(`${apiBase}/stream/write?${params.toString()}`);
     window._activeSse = { es, requestId };
+    let sawChunk = false;
 
     es.addEventListener("chunk", (event) => {
+      if (!sawChunk) {
+        sawChunk = true;
+        setProgress(55, progressLabel ? `正文生成中（${progressLabel}）…` : "正文生成中…", false);
+      }
       output.textContent += event.data;
+    });
+
+    es.addEventListener("phase", (event) => {
+      const raw = event && event.data ? String(event.data) : "";
+      let parsed = null;
+      try {
+        parsed = raw ? JSON.parse(raw) : null;
+      } catch (_) {
+        parsed = null;
+      }
+      const stage = parsed && parsed.stage ? String(parsed.stage) : "";
+      if (stage === "humanizing") {
+        setProgress(
+          82,
+          progressLabel ? `去AI味中（${progressLabel}）…` : "去AI味中…",
+          false
+        );
+      }
     });
 
     const finish = async (opts = { ok: true, isError: false, message: "" }) => {
@@ -645,6 +690,11 @@ function runSingleStream({ params, requestId, projectId, progressLabel = "" }) {
       }
       if (stopBtn) stopBtn.disabled = true;
       if (panel) panel.classList.remove("streaming");
+      if (opts.ok && !opts.isError) {
+        setProgress(100, opts.message || "已完成。", false);
+      } else {
+        setProgress(100, opts.message || "续写失败，请检查网络或配置。", true);
+      }
 
       if (statusEl) {
         if (opts.isError) {
@@ -727,13 +777,26 @@ function startStream() {
   const useLongMemory = longMemorySwitch
     ? longMemorySwitch.checked
     : true;
+  const humanizeSwitch = document.getElementById("humanize-switch");
+  const humanizeText = humanizeSwitch ? humanizeSwitch.checked : true;
+  const protagonistTeamInput = document.getElementById("protagonist-team-input");
+  const protagonistTeam = protagonistTeamInput ? protagonistTeamInput.value.trim() : "";
 
   const output = document.getElementById("output");
   output.textContent = "";
   const statusEl = document.getElementById("stream-status");
+  const progressEl = document.getElementById("stream-progress");
+  const progressBarEl = document.getElementById("stream-progress-bar");
   if (statusEl) {
     statusEl.textContent = "";
     statusEl.classList.remove("error");
+  }
+  if (progressEl) {
+    progressEl.classList.remove("error");
+    progressEl.classList.add("hidden");
+  }
+  if (progressBarEl) {
+    progressBarEl.style.width = "0%";
   }
 
   // 多章节模式：仅在“续写到结局”开启
@@ -776,6 +839,8 @@ function startStream() {
           styleId,
           mode: isFinal ? "ending" : "chapter",
           useLongMemory,
+          humanizeText,
+          protagonistTeam,
           userNote,
           chapterIndex,
           totalChapters,
@@ -809,6 +874,8 @@ function startStream() {
     styleId,
     mode,
     useLongMemory,
+    humanizeText,
+    protagonistTeam,
     userNote,
   });
   runSingleStream({ params, requestId, projectId });
@@ -865,6 +932,17 @@ window.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("start-write-btn")
     .addEventListener("click", startStream);
+
+  const protagonistTeamInput = document.getElementById("protagonist-team-input");
+  if (protagonistTeamInput) {
+    const savedProtagonistTeam = window.localStorage.getItem("sc_protagonist_team");
+    if (savedProtagonistTeam !== null) {
+      protagonistTeamInput.value = savedProtagonistTeam;
+    }
+    protagonistTeamInput.addEventListener("input", () => {
+      window.localStorage.setItem("sc_protagonist_team", protagonistTeamInput.value || "");
+    });
+  }
 
   const modeSelect = document.getElementById("mode-select");
   if (modeSelect) {

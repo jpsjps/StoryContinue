@@ -749,8 +749,26 @@ button.block {
   color: #ffb8c1;
 }
 
-.stream-output.streaming .stream-status::before {
-  content: "正在调用模型续写中，请稍候…";
+.stream-progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(145, 160, 220, 0.2);
+  border: 1px solid rgba(145, 160, 220, 0.3);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.stream-progress-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6f8bff, #9f7bff);
+  transition: width 0.28s ease;
+}
+
+.stream-progress.error .stream-progress-bar {
+  background: linear-gradient(90deg, #ff8a8a, #ffb3c1);
 }
 
 .hidden {
